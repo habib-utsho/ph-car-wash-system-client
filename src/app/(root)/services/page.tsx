@@ -15,18 +15,32 @@ const filterClass = (isChosen: boolean) =>
 export default async function ServicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branch?: string }>;
+  searchParams: Promise<{ branch?: string; name?: string }>;
 }) {
   // In Next.js 16 the search params must be awaited.
   // const { branch } = await searchParams;
 
-  const search = await searchParams;
-  const urlSearch = new URLSearchParams(search);
-  const query = urlSearch.toString() ? `?${urlSearch.toString()}` : "";
-  console.log(search, urlSearch.toString());
+  const search = await searchParams; // object format
+  const urlSearch = new URLSearchParams(search); //  object format
+  console.log({ search, urlSearch, searchString: urlSearch.toString() });
 
-  const allServices = await getServices(query);
+  const createFilterURL = (key: string, value: string | null) => {
+    const newParams = new URLSearchParams(search);
 
+    if (value && key) {
+      newParams.set(key, value);
+    } else {
+      newParams.delete(key);
+    }
+
+    console.log(newParams.toString(), "from handleQUery params");
+
+    const queryString = newParams.toString();
+
+    return queryString ? `/services?${queryString}` : "/services";
+  };
+
+  const allServices = await getServices(urlSearch.toString());
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
       <h1 className="text-2xl font-semibold text-[#15295e]">
@@ -41,15 +55,32 @@ export default async function ServicesPage({
         <Link href="/services" className={filterClass(!search.branch)}>
           All
         </Link>
-        {BRANCHES.map((name) => (
+        {BRANCHES.map((branch) => (
           <Link
-            key={name}
-            href={`/services?branch=${name}`}
-            className={filterClass(search.branch === name)}
+            key={branch}
+            href={createFilterURL("branch", branch)}
+            className={filterClass(search.branch === branch)}
           >
-            {name}
+            {branch}
           </Link>
         ))}
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-2">
+        <Link href="/services" className={filterClass(!search.branch)}>
+          All
+        </Link>
+        {["Aidan Sandoval", "Jonas Barber", "Express Wash"].map((name) => {
+          return (
+            <Link
+              key={name}
+              href={createFilterURL("name", name)}
+              className={filterClass(search.name === name)}
+            >
+              {name}
+            </Link>
+          );
+        })}
       </div>
 
       {allServices.length === 0 ? (
