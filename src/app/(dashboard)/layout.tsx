@@ -17,6 +17,14 @@ const DashboardLayout = async ({ children }: { children: React.ReactNode }) => {
     auth.api.getSession({ headers: await headers() }),
   ]);
 
+  const jwtToken = await auth.api.getToken({ headers: await headers() });
+  if (!jwtToken) {
+    throw new Error("No token found. User must be logged in to fetch users.");
+  }
+  const token = jwtToken?.token;
+
+  console.log({token});
+
   // The shadcn sidebar stores its open/collapsed state in this cookie.
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 

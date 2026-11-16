@@ -8,7 +8,7 @@ import { API_BASE_URL } from "./config";
 
 // Returns every service from the backend.
 // The backend currently has no branch filter or owner filter, so callers filter.
-export async function getServices(query: string): Promise<TService[]> {
+export async function getServices(query?: string): Promise<TService[]> {
   const res = await fetch(`${API_BASE_URL}/services?${query}`, { cache: "no-store" });
 
   if (!res.ok) {

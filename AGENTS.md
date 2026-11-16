@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # PH Car Wash System — Project Source of Truth
 
-Last updated: 2026-11-16. Status: public services list (cards, branch filter) and service details page (Book Now) built. The public list currently shows no cards because of an in-progress owner filter in `services.ts` (K38). Earlier status: backend foundation done. Branch manager services page done (list own services, Add Service dialog, create through a server action), tested in headless Chrome. Not yet secured: the Express POST has no auth (K20). Open decisions in §14 (D1, D3, D5 block the JWT step).
+Last updated: 2026-11-17. Status: public services list, service details, the booking summary page, and the Stripe Checkout redirect (Pay Now) are in place. The success and cancel pages are built. The admin users page (role and branch) is built. Bookings stay `pending` until the Stripe webhook (PAY2) is built. The API is down until the syntax error in `routes/users/index.js` is fixed (K45). Security: the users and services API routes need the auth check (K44). The public list currently shows no cards because of an in-progress owner filter in `services.ts` (K38). Earlier status: backend foundation done. Branch manager services page done (list own services, Add Service dialog, create through a server action), tested in headless Chrome. Not yet secured: the Express POST has no auth (K20). Open decisions in §14 (D1, D3, D5 block the JWT step).
 
 This file lives in the client repo and covers both repos. Update it when a decision changes or a phase completes.
 
@@ -63,12 +63,15 @@ Route map (current):
 | `/signin`, `/signup` | Working (Better Auth client) |
 | `/services` | **Public.** Service cards with a branch filter (`?branch=Dhaka`). Plain links, no JavaScript needed. |
 | `/services/[id]` | **Public.** Service details with key features and a Book Now button. Unknown id → 404 page. |
-| `/booking/[id]` | Placeholder page. The real booking form is the bookings step. |
+| `/booking/[id]` | **Booking summary (2026-11-16).** Service details, the signed-in user's name and email, the total, and a Pay Now button. Pay Now (`booking/_components/PayNow.tsx`) creates a `pending` booking and redirects to Stripe Checkout. Signed-out visitors see a sign-in message and a Sign in link. |
+| `/booking/success` | **Done (2026-11-17).** "Payment successful" with the booking reference from `?bookingId=`, and links to My bookings and services. Stripe sends customers here. |
+| `/booking/cancel` | **Done (2026-11-17).** "Payment cancelled": no money was taken and the booking was not confirmed. Link back to services. Stripe sends customers here. |
 | `/dashboard` | Placeholder (no redirect to role dashboard) |
 | `/dashboard/user`, `/bookings`, `/bookings/upcoming`, `/profile` | Placeholders |
 | `/dashboard/branchManager/services` | **Working.** Own services in a shadcn table, "Add Service" dialog (server action) |
 | `/dashboard/branchManager`, `/bookings`, `/bookings/upcoming`, `/profile` | Placeholders |
-| `/dashboard/admin`, `/users`, `/services`, `/bookings`, `/bookings/upcoming`, `/branches`, `/branches/add`, `/profile` | Placeholders |
+| `/dashboard/admin/users` | **Working (2026-11-17).** All users in a table. The admin changes a role, and a branch for branch managers. Admin only (page check in the Server Component). |
+| `/dashboard/admin`, `/services`, `/bookings`, `/bookings/upcoming`, `/branches`, `/branches/add`, `/profile` | Placeholders |
 | `/api/auth/[...all]` | Better Auth handler |
 
 ## 4. Backend stack (server)
@@ -161,7 +164,9 @@ Implemented:
 - `GET /services`: public, unfiltered, returns `{ success, message, data }`.
 - `GET /services/:id`: one service (added 2026-11-16 for the details page). Returns 404 for a bad or unknown id.
 - `POST /services`: inserts the raw request body with `insertOne`, no auth, no validation, and returns the raw insert result (`{ acknowledged, insertedId }`), not the standard shape (K20, K21).
-- `/users` and `/bookings` are mounted as routers. Only placeholder routes exist.
+- `GET /users`: every user (name, email, role, branch). No auth check yet (K44).
+- `PATCH /users/:id`: body `{ role, branch }`. Returns 400 for an unknown role, or for a branch manager without a valid branch. Returns 404 for an unknown id. Keeps the branch only for branch managers (others get `null`). No auth check yet (K44).
+- `/bookings` is mounted as a router. Its checkout route is listed in §13 (Phase 4).
 
 The planned `/api` prefix (below) is not in use. Next.js keeps `/api/auth/*` on port 3000. The URL shape needs a decision (K23).
 
@@ -214,21 +219,28 @@ Values are intentionally not recorded in this file. Both `.env` files are git-ig
 | Role dashboards and subpages | Placeholder text only |
 | Route protection (signed-out redirect, wrong-role block) | Missing |
 | Public services list (cards, branch filter) and service details (Book Now) | Done (2026-11-16) |
+| Booking summary page (service, signed-in user, total, Pay Now placeholder) | Done (2026-11-16). Pay Now is not wired to payment yet (Phase 4). Booking records are not created yet (BK1). |
 | Public pages (home, booking form, about, compare) | Missing / placeholder |
 | Services: branch manager create + own list | **Working in the UI.** Create goes through a server action; the list is `GET /services` filtered to the caller on the page. The server still has no auth and no owner filter (K20, K25). |
 | Services: public browse, branch filter, details, edit, delete | Missing |
 | Bookings (create, list, upcoming) | Missing |
-| Stripe payment | Missing (package not installed) |
+| Stripe payment | **Partly (2026-11-17).** `stripe` is installed in the server, `POST /bookings/create-checkout-session` creates a pending booking and a Checkout session, and Pay Now redirects to Stripe. The success and cancel pages are built. The webhook (PAY2) is not built, so payment does not yet update the booking. |
 | Express foundation (structure, env validation, MongoDB connection, CORS, JSON parsing, errors, response shape) | Done and tested |
 | Express JWT verification (`verifyToken`, `requireRole`) | Missing (B5) |
 | Better Auth JWT plugin | Not enabled |
 | Branch assignment for branch managers | Partly. The `branch` field exists on the user and in the session (`src/lib/auth.ts`). The admin endpoint that sets it is missing (ADM1). |
-| Admin user management | Missing |
+| Admin user management | **Done for the UI (2026-11-17):** list all users and change role and branch. The API routes have no auth check yet (K44). |
 | Frontend ↔ backend calls | Two, both server-side in Next.js: `getServices()` (`src/lib/api/services.ts`, GET) and `createService` (`src/lib/action/services.ts`, POST) |
 | Automated tests | None in the repo. A 12-check smoke test was run once from outside the repo and passed (2026-11-15). |
 | Type check | `tsc` reports an error in `src/app/(root)/layout.tsx` (K7) |
 
 ## 12. Completed tasks
+
+- Admin users page (2026-11-17): `/dashboard/admin/users` (Server Component: session check, admin-only redirect, `getAllUsers()`). `UsersTable.tsx` (client): one row per user, role menu, branch menu for branch managers, Save per row with a toast. Server action `updateUser` (`src/lib/action/users.ts`) checks the admin role, blocks removing your own admin role, then calls `PATCH /users/:id`. Server: `PATCH /users/:id` (in `routes/users/index.js`). Checked with 14 checks (API validation, admin gate, and a real Save in headless Chrome). Test accounts were removed afterward.
+
+- Success and cancel pages (2026-11-17): `/booking/success` (reads `?bookingId=` and shows the reference) and `/booking/cancel` (explains that no money was taken). Checked: both return 200, show the right message, and are not caught by the `/booking/[id]` route. Screenshots reviewed.
+
+- Booking summary page (2026-11-16) at `/booking/[id]`: loads the service with `getServiceById`, reads the signed-in user on the server with `auth.api.getSession`, and shows the service details, a sign-in message (signed out) or review message and the user's name and email (signed in), the total, and a disabled Pay Now button with a note. Unknown or bad ids return 404. Checked with 12 HTTP checks (signed out, signed in, 404s, temporary customer deleted afterward) and browser screenshots. The browser console shows no errors on this page.
 
 - Public pages (2026-11-16): `/services` (service cards from `GET /services`, branch filter with plain links), `/services/[id]` (details, key features, Book Now link), `/booking/[id]` placeholder, and server route `GET /services/:id`. Checked with 13 HTTP checks (API, list, filter, details, 404, placeholder) and a headless screenshot of the list. The `[id]` route and the filter both worked before the in-progress edit in K38.
 
@@ -277,19 +289,19 @@ Work in phases. Finish one phase, review it, then start the next. Keep each step
 ### Phase 3 — Bookings (vertical slice 2)
 
 - **BK1** Backend: `POST /api/bookings` (user, `pending`); `GET /api/bookings?upcoming=true` (role-scoped).
-- **BK2** Frontend: `/booking/[serviceId]` (date + optional slot); user bookings and upcoming pages; branch manager bookings and upcoming pages; admin bookings and upcoming pages.
+- **BK2** Frontend: `/booking/[id]` summary page is done (service, signed-in user, total, disabled Pay Now). Still to do: the date and optional slot inputs, and creating the booking record (BK1); user bookings and upcoming pages; branch manager bookings and upcoming pages; admin bookings and upcoming pages.
 - Pause for review.
 
 ### Phase 4 — Stripe payment (vertical slice 3)
 
 - **PAY1** Install `stripe` in the server (required by the brief). `POST /api/payments/checkout` creates a Checkout Session for the user's own pending booking, stores `stripeSessionId`, and returns the URL.
 - **PAY2** `POST /api/payments/webhook` with signature verification. On `checkout.session.completed`, set `paymentStatus: paid` and `bookingStatus: confirmed`. Mount before `express.json()`. (D8)
-- **PAY3** Frontend: redirect to Stripe; `/booking/success` and `/booking/cancel` pages.
+- **PAY3 ✅ Mostly done.** Pay Now redirects to Stripe (`PayNow.tsx`), and the `/booking/success` and `/booking/cancel` pages are built (2026-11-17). Still to do: confirm the payment with the webhook (PAY2) before the success page can say the booking is confirmed.
 
 ### Phase 5 — Admin
 
-- **ADM1** `GET /api/users`, `PATCH /api/users/:id/role`, `PATCH /api/users/:id/branch`.
-- **ADM2** Admin users page (table with role and branch selects). Reuse the services and bookings list pages for the admin "all" views.
+- **ADM1 ✅ Partly (2026-11-17).** `GET /users` and `PATCH /users/:id` are built (role and branch in one call). Still to do: the auth check (B5), so only a verified admin can call them.
+- **ADM2 ✅ Users page built (2026-11-17).** Reuse the services and bookings list pages for the admin "all" views later.
 
 ### Phase 6 — Polish
 
@@ -354,6 +366,14 @@ Work in phases. Finish one phase, review it, then start the next. Keep each step
 | K36 | Debug `console.log` calls in `ServiceForm.tsx` (two). Remove before the feature is finished. | `src/components/dashboard/branchManager/ServiceForm.tsx` |
 | K37 | If a page says `... is not a function` after you edit a shared file (for example `lib/api/services.ts`), the running `npm run dev` kept an old copy. Stop the dev server and start it again. This happened on 2026-11-16 and cleared after a reload. | Dev server only |
 | K38 | **Open, 2026-11-16.** `src/lib/api/services.ts` line 12 is in an in-progress edit: `?createdBy="branchmanager4@gmail.com"` filters the public list, so `/services` shows no cards while it is in place. (The earlier syntax error is fixed; the page returns 200 again.) Keep `getServices()` unfiltered for the public page. Put any owner filter (K25) in a separate function used only by the dashboard. | `src/lib/api/services.ts:12` |
+| K39 | Sign-in does not return to the booking page. After sign-in the user lands on `/`, so a signed-out visitor must come back to the booking page by hand. Fix later: add a callback URL to the sign-in form. | `src/components/auth/SigninForm.tsx` |
+| K40 | **Open, 2026-11-16 (dashboard).** `dashboard/branchManager/services/page.tsx` calls `getServices()` with no argument, but `getServices(query)` now requires one. TypeScript reports the error, and at runtime the request goes to `/services?undefined`. A fix is to give `query` a default of `""`. | `src/app/(dashboard)/dashboard/branchManager/services/page.tsx:23`, `src/lib/api/services.ts` |
+| K41 | Debug `console.log` calls remain in the public list page (`(root)/services/page.tsx`) and in the server list route (`routes/services/index.js`, three calls). Remove before the feature is finished. | same files |
+| K42 | **Open (2026-11-17).** The success page is reached through the Stripe redirect only. The booking stays `pending` / `unpaid` until the webhook (PAY2) marks it paid. Do not treat the redirect as proof of payment for anything important. | `src/app/(root)/booking/success/page.tsx`, server `routes/bookings/index.js` |
+| K44 | **Open, high priority (2026-11-17).** The users API has no auth check. `GET /users` lists every user's name, email and role, and `PATCH /users/:id` changes any user's role. Anyone who can reach port 5000 can do both. The Next page and action check for the admin role, but Express does not. Fix in B5 (`verifyToken` + `requireRole`) before real use. The same applies to `POST /services` (K20). | `ph-car-wash-system-server/src/routes/users/index.js` |
+| K45 | **Open (2026-11-17).** The real `routes/users/index.js` has a syntax error from in-progress JWT work: a `try` block with no `catch`, and `createRemoteJWKSet` is not imported. The whole API (port 5000) is down until it is fixed. Tests for this page used a temporary copy of the server with the same users logic. | `ph-car-wash-system-server/src/routes/users/index.js` |
+| K46 | The "cannot remove your own admin role" rule is checked in the Next action only. Express does not enforce it. | `src/lib/action/users.ts` |
+| K43 | **Open, security (2026-11-17).** `createBooking` in `src/lib/action/booking.ts` has no `"use server"`, so it runs in the browser and calls Express directly. It sends `userEmail` from the browser, and the server route (`POST /bookings/create-checkout-session`) trusts it: there is no sign-in check, and `userId` is never sent. Anyone can create bookings for any email. Fix before real payments: make it a server action that reads the session, and have the server take the user from the verified token (same fix as K20). Also remove its `console.log` calls. | `src/lib/action/booking.ts`, server `routes/bookings/index.js` |
 | K18 | On Windows, `child.kill("SIGINT")` is a hard kill, so the graceful shutdown path (close DB, exit 0) is not automated. Check it manually: run `npm run dev`, press Ctrl+C, and confirm the process exits cleanly. | `src/index.js` |
 | K19 | `npm test` is a placeholder. The repo has no automated tests. | `package.json` |
 | K20 | **Express `POST /services` has no auth and no validation.** Anyone who can reach port 5000 can insert any document, including a fake `createdBy` or branch. The Next action validates, but direct calls to Express bypass it. Fix in B4/B5. | `ph-car-wash-system-server/src/routes/services/index.js` |

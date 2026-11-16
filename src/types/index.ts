@@ -36,11 +36,28 @@ export type TServiceFormState = {
     values?: Partial<Record<TServiceField, string>>;
 };
 
+
+export type TCommonApiResponse<T> = {
+    success: boolean;
+    message: string;
+    data: T;
+};
+
 export type TUser = {
     name: string;
     email: string;
     image?: string | null;
     role?: string | null;
+};
+
+// A user as returned by the Express API (GET /users), for the admin page.
+export type TAdminUser = {
+    _id: string;
+    name: string;
+    email: string;
+    role: TUserRole;
+    branch?: TBranch | null;
+    image?: string | null;
 };
 
 export type TDashboardSidebarItem = {

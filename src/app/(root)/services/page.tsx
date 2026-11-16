@@ -58,7 +58,7 @@ export default async function ServicesPage({
         {BRANCHES.map((branch) => (
           <Link
             key={branch}
-            href={createFilterURL("branch", branch)}
+            href={createFilterURL("branch", branch)} // Click Khulna ->  return: /services?branch=Khulna
             className={filterClass(search.branch === branch)}
           >
             {branch}

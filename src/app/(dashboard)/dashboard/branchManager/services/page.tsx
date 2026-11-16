@@ -20,7 +20,7 @@ export default async function BranchManagerServicesPage() {
     redirect(`/dashboard/${role}`);
   }
 
-  const services = await getServices();
+  const services = await getServices("branch=" + session.user.branch);
 
   return (
     <div className="flex flex-col gap-6">

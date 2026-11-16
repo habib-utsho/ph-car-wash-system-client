@@ -144,7 +144,7 @@ const DashboardSidebar = ({ user }: { user: TUser | null }) => {
   const role = user?.role || "user"; // Default role
   const sidebarItems = roleBasedSidebarItems[role as TUserRole] || [];
 
-  console.log(sidebarItems, "sidebarItems");
+  // console.log(sidebarItems, "sidebarItems");
 
   // On mobile the sidebar is a sheet; close it after navigating.
   const closeMobile = () => setOpenMobile(false);
